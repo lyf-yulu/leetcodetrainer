@@ -1,0 +1,9 @@
+# AI credentials — never commit
+config.json
+
+# runtime state: cached problems, progress, mistake notebook
+data/
+
+.DS_Store
+node_modules/
+tests/node_modules

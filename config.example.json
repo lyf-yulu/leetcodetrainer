@@ -1,0 +1,6 @@
+{
+  "baseUrl": "https://api.deepseek.com/v1",
+  "model": "deepseek-chat",
+  "apiKey": "sk-replace-me",
+  "pyodideVersion": "v0.28.3"
+}

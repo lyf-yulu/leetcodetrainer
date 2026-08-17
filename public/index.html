@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LeetCode Trainer</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A7%A0%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<header>
+  <span class="brand">LC Trainer</span>
+  <input id="slug" placeholder="two-sum" spellcheck="false" autocomplete="off">
+  <button id="load">加载</button>
+  <select id="lang" title="语言"></select>
+  <span class="spacer"></span>
+  <span id="env-badges" class="row"></span>
+  <button id="btn-list" class="ghost">题库</button>
+  <button id="btn-progress" class="ghost">进度</button>
+  <button id="btn-notes" class="ghost">错题本</button>
+  <button id="btn-settings" class="ghost">⚙</button>
+</header>
+
+<main>
+  <!-- ---------------- problem ---------------- -->
+  <section class="pane">
+    <div class="pane-head">
+      <span>题目</span>
+      <span class="spacer"></span>
+      <button id="btn-lang" class="ghost" hidden title="切换题面语言">中文</button>
+    </div>
+    <div class="pane-body" id="problem-pane">
+      <div class="empty">
+        输入题号、题名或 slug 后点「加载」，例如<br>
+        <code>1</code> · <code>two sum</code> · <code>two-sum</code> · <code>lru-cache</code><br><br>
+        或点顶栏「题库」搜索全部 4000+ 题目
+      </div>
+    </div>
+  </section>
+
+  <!-- ---------------- editor ---------------- -->
+  <section class="pane">
+    <div class="pane-head">
+      <span>代码</span>
+      <span class="spacer"></span>
+      <button id="btn-reset" class="ghost" title="恢复官方模板">重置</button>
+    </div>
+    <div id="editor-host"><textarea id="fallback-editor" spellcheck="false"></textarea></div>
+    <div class="editor-foot">
+      <button id="btn-run">运行示例</button>
+      <button id="btn-submit" class="primary">提交</button>
+      <input id="custom-input" placeholder='调试输入 JSON：[[2,7,11,15],9]'
+        title="粘贴 JSON 输入直接运行看输出（不判对错、不记进度），回车或点「调试」">
+      <button id="btn-custom" title="运行自定义输入">调试</button>
+      <span class="spacer"></span>
+      <span id="run-status" class="badge"></span>
+    </div>
+  </section>
+
+  <!-- ---------------- results + coach ---------------- -->
+  <section class="pane third">
+    <div class="pane-head">
+      <span>结果 &amp; AI 教练</span>
+      <span class="spacer"></span>
+      <button id="btn-gen-tests" class="ghost" title="用 AI 补齐期望输出与边界用例">补全用例</button>
+    </div>
+    <div class="pane-body" id="result-pane">
+      <div class="empty">运行代码后，这里显示判题结果与 AI 分析</div>
+    </div>
+  </section>
+</main>
+
+<!-- ---------------- overlays ---------------- -->
+
+<div class="overlay" id="ov-list">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>题库</h3>
+      <input id="list-search" placeholder="按题号或题名搜索，如 1 或 two sum">
+      <button id="btn-list-refresh" class="ghost" title="强制重新拉取题库">刷新</button>
+      <span class="spacer"></span>
+      <button data-close="ov-list" class="ghost">关闭</button>
+    </div>
+    <div class="modal-body flush" id="list-body"></div>
+  </div>
+</div>
+
+<div class="overlay" id="ov-progress">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>刷题进度</h3>
+      <span class="spacer"></span>
+      <button data-close="ov-progress" class="ghost">关闭</button>
+    </div>
+    <div class="modal-body" id="progress-body"></div>
+  </div>
+</div>
+
+<div class="overlay" id="ov-notes">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>错题本</h3>
+      <span class="spacer"></span>
+      <button data-close="ov-notes" class="ghost">关闭</button>
+    </div>
+    <div class="modal-body" id="notes-body"></div>
+  </div>
+</div>
+
+<div class="overlay" id="ov-settings">
+  <div class="modal" style="width:min(560px,100%)">
+    <div class="modal-head">
+      <h3>设置</h3>
+      <span class="spacer"></span>
+      <button data-close="ov-settings" class="ghost">关闭</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--muted);font-size:13px;margin-top:0">
+        AI 配置写在项目根目录的 <code>config.json</code>，key 只留在后端，不进浏览器。
+        改完需重启 <code>node server.mjs</code>。
+      </p>
+      <pre class="log-box" style="max-height:none">{
+  "baseUrl": "https://api.deepseek.com/v1",
+  "model": "deepseek-chat",
+  "apiKey": "sk-...",
+  "pyodideVersion": "v0.28.3"
+}</pre>
+      <p style="color:var(--muted);font-size:12.5px">
+        任何 OpenAI 兼容服务都可以：DeepSeek、阿里百炼、OpenRouter、本地 vLLM 等。
+        <code>baseUrl</code> 填到 <code>/v1</code> 为止，程序会自己接 <code>/chat/completions</code>。
+      </p>
+      <div id="settings-env" class="col mt"></div>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>
