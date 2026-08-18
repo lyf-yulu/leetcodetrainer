@@ -136,7 +136,7 @@ Return JSON only:
 If their solution IS optimal, say so plainly — do not manufacture criticism. Discuss
 the optimal approach conceptually; do NOT write out a full alternative solution.`;
 
-export async function reviewPassing({ problem, language, code, timing }) {
+export async function reviewPassing({ problem, language, code, timing, results }) {
   const content = await call([
     { role: 'system', content: REVIEW_SYSTEM },
     {
@@ -150,9 +150,75 @@ ${stripHtml(problem.content).slice(0, 4000)}
 Their ${LANG_LABEL[language] || language} solution (all tests passed${timing ? `, ${timing}` : ''}):
 \`\`\`
 ${code}
-\`\`\``,
+\`\`\`
+
+${results ? `What it produced on the tests (input → output):\n${results}` : ''}`,
     },
   ], { json: true, maxTokens: 2500 });
+
+  return parseJson(content);
+}
+
+// ------------------------------------------------------------- error paths
+
+const EXPLAIN_COMPILE_SYSTEM = `You are a patient programming coach helping a beginner. Their code FAILED TO COMPILE.
+They have already seen the compiler output (line numbers are mapped to their own code).
+Explain it like a teacher, not a reference manual.
+
+Return JSON only:
+{"whatItMeans":"what the error means in plain language, 1-2 sentences",
+ "where":"which part of their code causes it, citing the line number",
+ "howToFix":"concrete fix steps, described not written — never output finished code",
+ "commonMistake":"the typical beginner mistake behind this error, one sentence"}`;
+
+export async function explainCompileError({ problem, language, code, errorText }) {
+  const content = await call([
+    { role: 'system', content: EXPLAIN_COMPILE_SYSTEM },
+    {
+      role: 'user',
+      content: `Problem: ${problem.title} (${problem.difficulty})
+
+Their ${LANG_LABEL[language] || language} code (line numbers shown — use these exact numbers):
+\`\`\`
+${numbered(code)}
+\`\`\`
+
+Compiler output (line numbers already refer to the code above):
+${String(errorText).slice(0, 2500)}`,
+    },
+  ], { json: true, maxTokens: 1200 });
+
+  return parseJson(content);
+}
+
+const EXPLAIN_RUNTIME_SYSTEM = `You are a patient programming coach helping a beginner. Their code CRASHED at runtime.
+They have already seen the traceback or error message (line numbers are mapped to their own code).
+
+Return JSON only:
+{"whatItMeans":"what the error means in plain language, 1-2 sentences",
+ "where":"which part of their code triggers it, citing the line number if identifiable",
+ "howToFix":"concrete fix steps, described not written — never output finished code",
+ "commonMistake":"the typical beginner mistake behind this error, one sentence",
+ "encouragement":"one honest sentence — no empty praise"}`;
+
+export async function explainRuntimeError({ problem, language, code, errorText, timedOut }) {
+  const content = await call([
+    { role: 'system', content: EXPLAIN_RUNTIME_SYSTEM },
+    {
+      role: 'user',
+      content: `Problem: ${problem.title} (${problem.difficulty})
+
+Their ${LANG_LABEL[language] || language} code (line numbers shown):
+\`\`\`
+${numbered(code)}
+\`\`\`
+
+${timedOut
+    ? 'The program TIMED OUT (>15s): the cause is likely an infinite loop, or an algorithm far too slow for the constraints.'
+    : 'Runtime error output (line numbers already refer to the code above):'}
+${String(errorText).slice(0, 2500)}`,
+    },
+  ], { json: true, maxTokens: 1200 });
 
   return parseJson(content);
 }

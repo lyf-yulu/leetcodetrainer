@@ -266,13 +266,17 @@ await test('调试：JSON 格式错误 → 明确弹窗提示', async () => {
   ok(dialog && /JSON 解析失败/.test(dialog), `应弹 JSON 错误，得到: ${dialog}`);
 });
 
-await test('调试：运行时异常 → 错误卡片带 traceback', async () => {
+await test('调试：运行时异常 → 错误卡片带 traceback + AI 解析', async () => {
   await setEditor(page, `class Solution:\n    def twoSum(self, nums, target):\n        raise ValueError("boom")\n`);
   await page.fill('#custom-input', '[[2,7,11,15],9]');
   await page.click('#btn-custom');
   await waitText(page, '.verdict', /运行异常/, 45000, 'custom py error');
   const pane = (await page.textContent('#result-pane')) || '';
   ok(/boom/.test(pane), `traceback 应含 boom，得到: ${pane.slice(0, 400)}`);
+  // 初学者场景：报错立即得到 AI 讲解，而非只有原始 traceback
+  await waitText(page, '#result-pane', /含义：/, 60000, 'runtime AI coach');
+  const coach = (await page.textContent('#result-pane')) || '';
+  ok(/怎么修/.test(coach), `AI 卡片应含怎么修: ${coach.slice(-500)}`);
 });
 
 console.log('\n3) C++ / Java：切换语言 + 调试\n');
@@ -299,7 +303,7 @@ await test('切到 Java：模板 + 调试运行输出 [1,2]', async () => {
   ok(/\[1,2\]/.test(pane), `应显示 [1,2]，得到: ${pane.slice(0, 300)}`);
 });
 
-await test('C++ 类型错误 → 编译错误卡片 + 行号映射到用户代码', async () => {
+await test('C++ 类型错误 → 编译错误卡片 + 行号映射 + AI 解析', async () => {
   await page.selectOption('#lang', 'cpp');
   await waitEditor(page, /vector<int> twoSum/, 15000, 'cpp template 2');
   await setEditor(page, CPP_TYPE_ERROR);
@@ -308,11 +312,15 @@ await test('C++ 类型错误 → 编译错误卡片 + 行号映射到用户代�
   await waitText(page, '.verdict', /编译错误/, 30000, 'cpp compile error');
   const pane = (await page.textContent('#result-pane')) || '';
   ok(/your code:4/.test(pane), `行号应映射到用户代码第 4 行，得到: ${pane.slice(0, 400)}`);
+  // 编译错误也要有 AI 讲解
+  await waitText(page, '#result-pane', /含义：/, 60000, 'compile AI coach');
+  const coach = (await page.textContent('#result-pane')) || '';
+  ok(/怎么修/.test(coach), `AI 卡片应含怎么修: ${coach.slice(-500)}`);
 });
 
 console.log('\n4) 提交判题 + 进度 + 无 AI 降级\n');
 
-await test('注入期望值后：错误答案提交 → 答案错误 + 进度记录「未通过」', async () => {
+await test('注入期望值后：运行示例答错也得到 AI 诊断', async () => {
   await page.evaluate(() => {
     localStorage.setItem('lct:tests:two-sum', JSON.stringify([
       { input: [[2, 7, 11, 15], 9], expected: [0, 1] },
@@ -325,6 +333,13 @@ await test('注入期望值后：错误答案提交 → 答案错误 + 进度记
   await page.selectOption('#lang', 'python3');
   await waitEditor(page, /def twoSum/, 15000, 'py template after lang switch');
   await setEditor(page, PY_WRONG);
+  // 非提交的运行示例:答错 → 诊断卡立即出现
+  await page.click('#btn-run');
+  await waitText(page, '.verdict', /答案错误/, 60000, 'wrong run');
+  await waitText(page, '#result-pane', /思路正确，实现有 bug|思路需要调整/, 90000, 'run diagnosis');
+});
+
+await test('错误答案提交 → 答案错误 + 进度记录「未通过」', async () => {
   await page.click('#btn-submit');
   await waitText(page, '.verdict', /答案错误/, 60000, 'wrong submit');
   await page.click('#btn-progress');

@@ -492,12 +492,13 @@ async function run(isSubmit) {
     if (out.compileError) {
       renderCompileError(out.compileError);
       status('编译失败');
+      coachCompile(out.compileError);
       return;
     }
     if (out.fatal) {
       renderFatal(out.fatal, out.timedOut);
       status(out.timedOut ? '超时' : '运行错误');
-      if (isSubmit) await coachTimeout(out.fatal, out.timedOut);
+      coachRuntime(out.fatal, out.timedOut);
       return;
     }
 
@@ -505,6 +506,14 @@ async function run(isSubmit) {
     state.lastJudged = { verdict, tests, code, language: state.language };
     renderResult(verdict, out.stray);
     status(verdictText(verdict));
+
+    // Example runs (非提交) also get coached on errors/wrong answers —
+    // beginners hit these constantly and need the explanation right away.
+    if (!isSubmit && verdict.counts.error > 0) {
+      coachRuntime(verdict.firstFailure?.error || '', false);
+    } else if (!isSubmit && verdict.counts.fail > 0) {
+      coachFailure(verdict);
+    }
 
     if (isSubmit) {
       // Unknowns (any-order / multiple-valid-answer cases) get adjudicated by
@@ -614,16 +623,23 @@ async function runCustom() {
     if (out.compileError) {
       renderCompileError(out.compileError);
       status('编译失败');
+      coachCompile(out.compileError);
       return;
     }
     if (out.fatal) {
       renderFatal(out.fatal, out.timedOut);
       status(out.timedOut ? '超时' : '运行错误');
+      coachRuntime(out.fatal, out.timedOut);
       return;
     }
     const verdict = judge(tests, out.records);
     renderResult(verdict, out.stray);
     status('调试完成 — 展示输出，不判对错');
+    if (verdict.counts.error > 0) {
+      coachRuntime(verdict.firstFailure?.error || '', false);
+    } else if (verdict.counts.fail > 0) {
+      coachFailure(verdict);
+    }
   } catch (err) {
     renderFatal(err.message);
     status('出错');
@@ -779,6 +795,9 @@ async function coach(verdict) {
         language: state.language,
         code,
         timing: `${verdict.totalMs.toFixed(1)}ms total`,
+        results: verdict.results
+          .map((r) => `${JSON.stringify(r.input)} → ${JSON.stringify(r.actual)}`)
+          .join('\n'),
       });
       renderReview(review);
       updateMastery(review.verdict);
@@ -804,19 +823,77 @@ async function coach(verdict) {
   }
 }
 
-async function coachTimeout(errText, timedOut) {
-  if (!state.env.ai?.configured || !timedOut) return;
-  coachLoading('AI 分析超时原因…');
+/**
+ * Errors are the beginner's normal state — every run that fails (compile
+ * error, crash, timeout) gets an AI explanation right away, on any run type.
+ * Judged runs keep their separate diagnosis/review flows.
+ */
+async function coachCompile(errorText) {
+  if (!state.env.ai?.configured) return;
+  coachLoading('AI 解析编译错误…');
+  try {
+    const r = await ai.explainCompileError({
+      problem: state.problem,
+      language: state.language,
+      code: state.editor.get(),
+      errorText,
+    });
+    coachSlot().innerHTML = renderErrorCoach(r, 'bad');
+    wireChat();
+  } catch (err) {
+    coachError(err.message);
+  }
+}
+
+async function coachRuntime(errorText, timedOut) {
+  if (!state.env.ai?.configured) return;
+  coachLoading(timedOut ? 'AI 分析超时原因…' : 'AI 解析运行错误…');
+  try {
+    const r = await ai.explainRuntimeError({
+      problem: state.problem,
+      language: state.language,
+      code: state.editor.get(),
+      errorText,
+      timedOut,
+    });
+    coachSlot().innerHTML = renderErrorCoach(r, 'bad');
+    wireChat();
+  } catch (err) {
+    coachError(err.message);
+  }
+}
+
+function renderErrorCoach(r, cls) {
+  return `
+    <div class="card ${cls}">
+      <h4>AI 解析 · 这个错误是什么</h4>
+      ${r.whatItMeans ? `<p><strong>含义：</strong>${esc(r.whatItMeans)}</p>` : ''}
+      ${r.where ? `<p><strong>位置：</strong>${esc(r.where)}</p>` : ''}
+      ${r.howToFix ? `<p><strong>怎么修：</strong>${esc(r.howToFix)}</p>` : ''}
+      ${r.commonMistake ? `<p style="color:var(--muted)"><strong>常见原因：</strong>${esc(r.commonMistake)}</p>` : ''}
+      ${r.encouragement ? `<p>${esc(r.encouragement)}</p>` : ''}
+    </div>
+    ${chatUi()}`;
+}
+
+/**
+ * Non-submit wrong answers: the full diagnosis (approach judgement, hints),
+ * but without saving a note — only judged submissions feed the 错题本.
+ */
+async function coachFailure(verdict) {
+  if (!state.env.ai?.configured) return;
+  const failure = verdict.results.find((r) => r.status === 'fail' || r.status === 'error');
+  if (!failure) return;
+  coachLoading('AI 正在判断你的思路是否正确…');
   try {
     const diag = await ai.diagnoseFailure({
       problem: state.problem,
       language: state.language,
       code: state.editor.get(),
-      failure: { input: null, expected: null, actual: null, error: errText },
-      counts: { pass: 0, fail: 0, error: 1 },
+      failure,
+      counts: verdict.counts,
     });
     renderDiagnosis(diag);
-    await saveNote(diag, state.editor.get());
   } catch (err) {
     coachError(err.message);
   }
