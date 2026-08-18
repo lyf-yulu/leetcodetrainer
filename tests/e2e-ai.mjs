@@ -105,12 +105,15 @@ await test('补全用例：AI 生成期望值，状态提示「用例就绪」',
   ok(m && Number(m[1]) > 0 && Number(m[2]) === Number(m[1]), `期望值应全部生成: ${status}`);
 });
 
-await test('错误提交 → AI 诊断卡片（思路判断 + 错因）', async () => {
+await test('错误提交 → AI 诊断卡片（思路判断 + 错因，内容为中文）', async () => {
   await setEditor(page, PY_WRONG);
   await page.click('#btn-submit');
   await waitText(page, '.verdict', /答案错误/, 60000, 'wrong verdict');
   // wait for the FINAL diagnosis header, not the loading text
   await waitText(page, '#result-pane', /思路正确，实现有 bug|思路需要调整/, 120000, 'AI diagnosis');
+  const slot = (await page.textContent('#coach-slot')) || '';
+  ok(/[一-鿿]{4,}/.test(slot), `教练卡内容应为中文: ${slot.slice(0, 200)}`);
+  ok(!/\bThe (function|code|solution)\b/i.test(slot), `不应出现英文正文: ${slot.slice(0, 200)}`);
 }, 300000);
 
 await test('错题本：失败自动落一条笔记', async () => {

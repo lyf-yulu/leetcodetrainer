@@ -68,6 +68,15 @@ function stripHtml(html) {
 
 const LANG_LABEL = { python3: 'Python', java: 'Java', cpp: 'C++' };
 
+/**
+ * The statement fed to the model. Prefers the cached Chinese translation when
+ * present — coaching built on the language the user reads tends to come back
+ * in that language, and quotes line up with what's on screen.
+ */
+function statementOf(problem, max = 12000) {
+  return stripHtml(problem.translatedContent || problem.content).slice(0, max);
+}
+
 // ------------------------------------------------------------- test cases
 
 const TESTCASE_SYSTEM = `You build test suites for competitive-programming problems.
@@ -101,7 +110,7 @@ export async function generateTestCases({ problem, exampleInputs }) {
       content: `Problem: ${problem.title} (${problem.difficulty})
 
 Statement:
-${stripHtml(problem.content)}
+${statementOf(problem)}
 
 Function signature (metaData):
 ${JSON.stringify(problem.meta, null, 2)}
@@ -109,7 +118,8 @@ ${JSON.stringify(problem.meta, null, 2)}
 Example inputs parsed from LeetCode:
 ${JSON.stringify(exampleInputs, null, 2)}
 
-Recover the expected output for each example input, then add edge cases.`,
+Recover the expected output for each example input, then add edge cases.
+请用简体中文回答。`,
     },
   ], { json: true, maxTokens: 3000 });
 
@@ -151,14 +161,15 @@ export async function reviewPassing({ problem, language, code, timing, results }
 Topics: ${(problem.tags || []).join(', ')}
 
 Statement:
-${stripHtml(problem.content).slice(0, 4000)}
+${statementOf(problem, 4000)}
 
 Their ${LANG_LABEL[language] || language} solution (all tests passed${timing ? `, ${timing}` : ''}):
 \`\`\`
 ${code}
 \`\`\`
 
-${results ? `What it produced on the tests (input → output):\n${results}` : ''}`,
+${results ? `What it produced on the tests (input → output):\n${results}` : ''}
+请用简体中文回答。`,
     },
   ], { json: true, maxTokens: 2500 });
 
@@ -285,7 +296,7 @@ export async function diagnoseFailure({ problem, language, code, failure, counts
 Topics: ${(problem.tags || []).join(', ')}
 
 Statement:
-${stripHtml(problem.content).slice(0, 4000)}
+${statementOf(problem, 4000)}
 
 Their ${LANG_LABEL[language] || language} attempt (line numbers shown — use these
 exact numbers for bugLocation.line):
@@ -296,7 +307,8 @@ ${numbered(code)}
 Results: ${counts.pass} passed, ${counts.fail} wrong, ${counts.error} errored.
 ${detail}
 
-Any line numbers in the error above already refer to this same numbering.`,
+Any line numbers in the error above already refer to this same numbering.
+请用简体中文回答。`,
     },
   ], { json: true, maxTokens: 2500 });
 
@@ -322,13 +334,14 @@ export async function adjudicate({ problem, input, expected, actual }) {
       content: `Problem: ${problem.title}
 
 Requirements:
-${stripHtml(problem.content).slice(0, 2500)}
+${statementOf(problem, 2500)}
 
 input:    ${JSON.stringify(input)}
 expected: ${JSON.stringify(expected)}
 actual:   ${JSON.stringify(actual)}
 
-Is the actual output acceptable?`,
+Is the actual output acceptable?
+请用简体中文回答。`,
     },
   ], { json: true, maxTokens: 400 });
 
@@ -388,7 +401,7 @@ explain it thoroughly. Their language is ${LANG_LABEL[language] || language}.
 IMPORTANT: reply in Simplified Chinese (简体中文), keeping code identifiers in English.
 
 Problem statement:
-${stripHtml(problem.content).slice(0, 3000)}
+${statementOf(problem, 3000)}
 
 Their current code:
 \`\`\`
