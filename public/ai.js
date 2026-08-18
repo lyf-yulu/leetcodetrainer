@@ -82,6 +82,9 @@ expose expected outputs). Your job:
 3. If the problem accepts multiple valid answers (any order, any valid pair), set
    "orderInsensitive": true and/or "multipleValid": true on that case.
 
+IMPORTANT: reply in Simplified Chinese (简体中文) — every free-text field must be
+written in 中文. Keep JSON keys and code identifiers in English.
+
 Return JSON only:
 {"cases":[{"input":[...],"expected":<value>,"label":"...","source":"statement"|"synthesized",
            "orderInsensitive":false,"multipleValid":false}],
@@ -122,6 +125,9 @@ Recover the expected output for each example input, then add edge cases.`,
 const REVIEW_SYSTEM = `You are a sharp, warm algorithms coach reviewing a solution that PASSED.
 Passing is the floor, not the goal. Your job is to tell the user what an interviewer
 would still push back on.
+
+IMPORTANT: reply in Simplified Chinese (简体中文) — every free-text field must be
+written in 中文. Keep JSON keys and code identifiers in English.
 
 Return JSON only:
 {"verdict":"optimal"|"acceptable"|"suboptimal",
@@ -165,6 +171,9 @@ const EXPLAIN_COMPILE_SYSTEM = `You are a patient programming coach helping a be
 They have already seen the compiler output (line numbers are mapped to their own code).
 Explain it like a teacher, not a reference manual.
 
+IMPORTANT: reply in Simplified Chinese (简体中文) — every free-text field must be
+written in 中文. Keep JSON keys and code identifiers in English.
+
 Return JSON only:
 {"whatItMeans":"what the error means in plain language, 1-2 sentences",
  "where":"which part of their code causes it, citing the line number",
@@ -193,6 +202,9 @@ ${String(errorText).slice(0, 2500)}`,
 
 const EXPLAIN_RUNTIME_SYSTEM = `You are a patient programming coach helping a beginner. Their code CRASHED at runtime.
 They have already seen the traceback or error message (line numbers are mapped to their own code).
+
+IMPORTANT: reply in Simplified Chinese (简体中文) — every free-text field must be
+written in 中文. Keep JSON keys and code identifiers in English.
 
 Return JSON only:
 {"whatItMeans":"what the error means in plain language, 1-2 sentences",
@@ -234,6 +246,9 @@ sound, or is the idea itself wrong? Everything else follows from that.
 - approachSound: false -> the idea cannot be patched into a correct solution. Give
   three escalating hints (nudge -> technique name -> concrete strategy) so they can
   find it themselves.
+
+IMPORTANT: reply in Simplified Chinese (简体中文) — every free-text field must be
+written in 中文. Keep JSON keys and code identifiers in English.
 
 Return JSON only:
 {"approachSound":true|false,
@@ -294,6 +309,9 @@ const ADJUDICATE_SYSTEM = `A mechanical judge could not decide whether an output
 (the problem may accept multiple valid answers, any ordering, or floating-point drift).
 Decide whether the actual output satisfies the problem's requirements.
 
+IMPORTANT: reply in Simplified Chinese (简体中文) — every free-text field must be
+written in 中文. Keep JSON keys in English.
+
 Return JSON only: {"correct":true|false,"reason":"one sentence"}`;
 
 export async function adjudicate({ problem, input, expected, actual }) {
@@ -321,6 +339,9 @@ Is the actual output acceptable?`,
 
 const NOTE_SYSTEM = `Write a terse, reusable mistake-notebook entry from a failed attempt.
 The user will reread this weeks later, so it must be self-contained and skimmable.
+
+IMPORTANT: reply in Simplified Chinese (简体中文) — every free-text field must be
+written in 中文. Keep JSON keys and code identifiers in English.
 
 Return JSON only:
 {"title":"short pattern name, generalized beyond this one problem",
@@ -363,6 +384,8 @@ export async function ask({ problem, code, language, question, history = [] }) {
 Answer the user's question directly and concisely. Guide toward insight rather than
 handing over code — but if they explicitly ask to see a full solution, give it and
 explain it thoroughly. Their language is ${LANG_LABEL[language] || language}.
+
+IMPORTANT: reply in Simplified Chinese (简体中文), keeping code identifiers in English.
 
 Problem statement:
 ${stripHtml(problem.content).slice(0, 3000)}

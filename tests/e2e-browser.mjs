@@ -277,6 +277,8 @@ await test('调试：运行时异常 → 错误卡片带 traceback + AI 解析',
   await waitText(page, '#result-pane', /含义：/, 60000, 'runtime AI coach');
   const coach = (await page.textContent('#result-pane')) || '';
   ok(/怎么修/.test(coach), `AI 卡片应含怎么修: ${coach.slice(-500)}`);
+  const coachBody = coach.slice(coach.indexOf('含义'));
+  ok(/[一-鿿]{4,}/.test(coachBody), `AI 讲解应为中文: ${coachBody.slice(0, 200)}`);
 });
 
 console.log('\n3) C++ / Java：切换语言 + 调试\n');
@@ -316,6 +318,8 @@ await test('C++ 类型错误 → 编译错误卡片 + 行号映射 + AI 解析',
   await waitText(page, '#result-pane', /含义：/, 60000, 'compile AI coach');
   const coach = (await page.textContent('#result-pane')) || '';
   ok(/怎么修/.test(coach), `AI 卡片应含怎么修: ${coach.slice(-500)}`);
+  const coachBody = coach.slice(coach.indexOf('含义'));
+  ok(/[一-鿿]{4,}/.test(coachBody), `AI 讲解应为中文: ${coachBody.slice(0, 200)}`);
 });
 
 console.log('\n4) 提交判题 + 进度 + 无 AI 降级\n');
