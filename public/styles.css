@@ -320,6 +320,15 @@ textarea#fallback-editor {
   font-size: 13px;
 }
 
+.hint-item { margin-bottom: 8px; }
+.hint-item .hint-text { margin-bottom: 0; }
+.hint-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
 .chat-log { display: flex; flex-direction: column; gap: 8px; margin-bottom: 9px; }
 .msg { padding: 8px 11px; border-radius: 7px; font-size: 13px; }
 .msg.user { background: var(--panel-2); border-left: 2px solid var(--blue); }

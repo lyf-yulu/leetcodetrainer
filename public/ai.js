@@ -180,16 +180,29 @@ ${results ? `What it produced on the tests (input → output):\n${results}` : ''
 
 const EXPLAIN_COMPILE_SYSTEM = `You are a patient programming coach helping a beginner. Their code FAILED TO COMPILE.
 They have already seen the compiler output (line numbers are mapped to their own code).
-Explain it like a teacher, not a reference manual.
+
+The single most important judgement you make: is their overall APPROACH fundamentally sound?
+A compile error is very often just a mechanical slip — a typo, a missing colon/bracket/semicolon,
+a wrong name — sitting on top of correct logic. Do NOT assume an error means they don't understand
+the problem. Read the code, infer their intended algorithm, and judge THAT against the statement.
+
+- approachSound: true  -> their idea is right; the error is mechanical. Say so plainly and warmly
+  first, then explain only the mechanical fix. Do not undermine their approach.
+- approachSound: false -> the idea itself cannot lead to a correct solution. Say so, explain the
+  mechanical error too, then give ONE directional nudge (the technique or invariant to reach for).
 
 IMPORTANT: reply in Simplified Chinese (简体中文) — every free-text field must be
 written in 中文. Keep JSON keys and code identifiers in English.
 
 Return JSON only:
-{"whatItMeans":"what the error means in plain language, 1-2 sentences",
+{"approachSound":true|false,
+ "approachSummary":"what they were attempting, one generous sentence",
+ "whatItMeans":"what the error means in plain language, 1-2 sentences",
  "where":"which part of their code causes it, citing the line number",
  "howToFix":"concrete fix steps, described not written — never output finished code",
- "commonMistake":"the typical beginner mistake behind this error, one sentence"}`;
+ "approachHint":"only when approachSound is false: one directional nudge toward a correct approach (technique name or invariant), not code",
+ "commonMistake":"the typical beginner mistake behind this error, one sentence",
+ "encouragement":"one honest sentence — no empty praise"}`;
 
 export async function explainCompileError({ problem, language, code, errorText }) {
   const content = await call([
@@ -197,6 +210,10 @@ export async function explainCompileError({ problem, language, code, errorText }
     {
       role: 'user',
       content: `Problem: ${problem.title} (${problem.difficulty})
+Topics: ${(problem.tags || []).join(', ')}
+
+Statement:
+${statementOf(problem, 3000)}
 
 Their ${LANG_LABEL[language] || language} code (line numbers shown — use these exact numbers):
 \`\`\`
@@ -206,7 +223,7 @@ ${numbered(code)}
 Compiler output (line numbers already refer to the code above):
 ${String(errorText).slice(0, 2500)}`,
     },
-  ], { json: true, maxTokens: 1200 });
+  ], { json: true, maxTokens: 1500 });
 
   return parseJson(content);
 }
@@ -214,13 +231,29 @@ ${String(errorText).slice(0, 2500)}`,
 const EXPLAIN_RUNTIME_SYSTEM = `You are a patient programming coach helping a beginner. Their code CRASHED at runtime.
 They have already seen the traceback or error message (line numbers are mapped to their own code).
 
+The single most important judgement you make: is their overall APPROACH fundamentally sound?
+A runtime crash can be a genuine logic bug, but it is also very often a correct idea with a small
+mechanical slip — a bad index, a null reference, a wrong variable. Do NOT assume a crash means they
+don't understand the problem. Read the code, infer intent, and judge it against the statement.
+
+- approachSound: true  -> their idea is right; the crash is a mechanical/boundary slip. Say so
+  plainly and warmly first, then explain only the mechanical fix. Do not undermine their approach.
+- approachSound: false -> the idea itself is flawed. Say so, explain the crash too, then give ONE
+  directional nudge (the technique or invariant to reach for).
+
+If the program timed out, also judge whether the approach is sound but too slow (complexity) versus
+an infinite loop versus a fundamentally wrong idea, and say which.
+
 IMPORTANT: reply in Simplified Chinese (简体中文) — every free-text field must be
 written in 中文. Keep JSON keys and code identifiers in English.
 
 Return JSON only:
-{"whatItMeans":"what the error means in plain language, 1-2 sentences",
+{"approachSound":true|false,
+ "approachSummary":"what they were attempting, one generous sentence",
+ "whatItMeans":"what the error means in plain language, 1-2 sentences",
  "where":"which part of their code triggers it, citing the line number if identifiable",
  "howToFix":"concrete fix steps, described not written — never output finished code",
+ "approachHint":"only when approachSound is false: one directional nudge toward a correct approach (technique name or invariant), not code",
  "commonMistake":"the typical beginner mistake behind this error, one sentence",
  "encouragement":"one honest sentence — no empty praise"}`;
 
@@ -230,6 +263,10 @@ export async function explainRuntimeError({ problem, language, code, errorText, 
     {
       role: 'user',
       content: `Problem: ${problem.title} (${problem.difficulty})
+Topics: ${(problem.tags || []).join(', ')}
+
+Statement:
+${statementOf(problem, 3000)}
 
 Their ${LANG_LABEL[language] || language} code (line numbers shown):
 \`\`\`
@@ -237,11 +274,11 @@ ${numbered(code)}
 \`\`\`
 
 ${timedOut
-    ? 'The program TIMED OUT (>15s): the cause is likely an infinite loop, or an algorithm far too slow for the constraints.'
+    ? 'The program TIMED OUT (>15s): judge whether it is an infinite loop, an algorithm too slow for the constraints, or a fundamentally wrong approach.'
     : 'Runtime error output (line numbers already refer to the code above):'}
 ${String(errorText).slice(0, 2500)}`,
     },
-  ], { json: true, maxTokens: 1200 });
+  ], { json: true, maxTokens: 1500 });
 
   return parseJson(content);
 }
@@ -385,6 +422,65 @@ ${code}
   ], { json: true, maxTokens: 900 });
 
   return parseJson(content);
+}
+
+// ------------------------------------------------------------- getting started
+
+const HINTS_SYSTEM = `You are a warm, patient algorithms coach. The user is facing this problem for the
+FIRST time and has NO idea where to start. Give them staged hints that lead them to the
+solution themselves — never the solution.
+
+Give exactly three escalating hints:
+  1. a gentle nudge — reframe the problem or point at the first useful observation; no technique name
+  2. the technique or invariant to reach for (e.g. sliding window, prefix sum, hash map, two pointers)
+  3. a concrete strategy sketch — the shape of the algorithm; still not code, still leaves work
+
+Rules:
+- Never write code or a complete step-by-step algorithm.
+- Each hint must leave real thinking for the user.
+- "warmup" is ONE short sentence that orients them / confirms they understood the problem,
+  and reveals nothing about the approach.
+
+IMPORTANT: reply in Simplified Chinese (简体中文) — every free-text field must be written in 中文.
+Keep JSON keys and code identifiers in English.
+
+Return JSON only:
+{"warmup":"one short orienting sentence, no technique revealed",
+ "hints":["hint 1 (nudge)","hint 2 (technique/invariant)","hint 3 (strategy sketch, no code)"]}`;
+
+export async function hintsFor({ problem, language, code }) {
+  const codeBlock = code && String(code).trim()
+    ? `What they have typed so far (may be partial — use it only as context):
+\`\`\`
+${String(code)}
+\`\`\``
+    : 'They have not written any code yet.';
+
+  const content = await call([
+    { role: 'system', content: HINTS_SYSTEM },
+    {
+      role: 'user',
+      content: `Problem: ${problem.title} (${problem.difficulty})
+Topics: ${(problem.tags || []).join(', ')}
+
+Statement:
+${statementOf(problem, 5000)}
+
+Language: ${LANG_LABEL[language] || language}
+
+${codeBlock}
+
+请用简体中文回答。`,
+    },
+  ], { json: true, maxTokens: 900, temperature: 0.3 });
+
+  const parsed = parseJson(content);
+  return {
+    warmup: typeof parsed.warmup === 'string' ? parsed.warmup : '',
+    hints: (Array.isArray(parsed.hints) ? parsed.hints : [])
+      .filter((h) => typeof h === 'string' && h.trim())
+      .slice(0, 3),
+  };
 }
 
 // ------------------------------------------------------------- follow-up

@@ -24,6 +24,7 @@ const state = {
   notes: {},
   lastJudged: null,
   chat: [],
+  hints: null,        // {slug, warmup, hints:[...], stage} — staged "求助" hints
   drafts: {},         // slug:lang -> code, so switching does not lose work
   problemSet: null,   // {fetchedAt, problems: [{id,title,slug,difficulty,paidOnly}]}
   stmtLang: 'zh',     // statement language preference: 'zh' | 'en'
@@ -166,6 +167,7 @@ async function loadProblem(q) {
     const p = await api(`/api/problem?q=${encodeURIComponent(q)}`);
     state.problem = p;
     state.chat = [];
+    state.hints = null;
     $('slug').value = p.slug;
     $('custom-input').value = loadCustomInput(p.slug);
 
@@ -838,7 +840,7 @@ async function coachCompile(errorText) {
       code: state.editor.get(),
       errorText,
     });
-    coachSlot().innerHTML = renderErrorCoach(r, 'bad');
+    coachSlot().innerHTML = renderErrorCoach(r);
     wireChat();
   } catch (err) {
     coachError(err.message);
@@ -856,20 +858,23 @@ async function coachRuntime(errorText, timedOut) {
       errorText,
       timedOut,
     });
-    coachSlot().innerHTML = renderErrorCoach(r, 'bad');
+    coachSlot().innerHTML = renderErrorCoach(r);
     wireChat();
   } catch (err) {
     coachError(err.message);
   }
 }
 
-function renderErrorCoach(r, cls) {
+function renderErrorCoach(r) {
+  const sound = r.approachSound === true;
   return `
-    <div class="card ${cls}">
-      <h4>AI 解析 · 这个错误是什么</h4>
+    <div class="card ${sound ? 'accent' : 'bad'}">
+      <h4>${sound ? '你的思路是对的，只是这里写岔了' : '思路需要调整'} · 报错解析</h4>
+      ${r.approachSummary ? `<p><strong>你在做的：</strong>${esc(r.approachSummary)}</p>` : ''}
       ${r.whatItMeans ? `<p><strong>含义：</strong>${esc(r.whatItMeans)}</p>` : ''}
       ${r.where ? `<p><strong>位置：</strong>${esc(r.where)}</p>` : ''}
       ${r.howToFix ? `<p><strong>怎么修：</strong>${esc(r.howToFix)}</p>` : ''}
+      ${!sound && r.approachHint ? `<p style="color:var(--accent)"><strong>思路层面：</strong>${esc(r.approachHint)}</p>` : ''}
       ${r.commonMistake ? `<p style="color:var(--muted)"><strong>常见原因：</strong>${esc(r.commonMistake)}</p>` : ''}
       ${r.encouragement ? `<p>${esc(r.encouragement)}</p>` : ''}
     </div>
@@ -897,6 +902,63 @@ async function coachFailure(verdict) {
   } catch (err) {
     coachError(err.message);
   }
+}
+
+// ---------------------------------------------------------------- getting started
+
+/**
+ * "求助" for a first-timer with no idea where to start. Fetches three staged
+ * hints and reveals them ONE AT A TIME — each click reveals the next, so the
+ * user tries in between instead of getting the whole answer at once.
+ */
+async function helpMe() {
+  const p = state.problem;
+  if (!p) { alert('先加载一道题'); return; }
+  if (!state.env.ai?.configured) {
+    alert('AI 未配置。在项目根目录创建 config.json 后重启服务。');
+    return;
+  }
+  const btn = $('btn-help');
+  btn.disabled = true;
+  coachLoading('AI 正在为你想分阶段提示…');
+  try {
+    const data = await ai.hintsFor({ problem: p, language: state.language, code: state.editor.get() });
+    state.hints = { slug: p.slug, warmup: data.warmup, hints: data.hints, stage: 0 };
+    renderHints();
+  } catch (err) {
+    coachError(err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderHints() {
+  const h = state.hints;
+  if (!h || !h.hints || !h.hints.length) {
+    coachSlot().innerHTML = `<div class="card bad"><h4>求助</h4><p>AI 没能给出可用提示，请稍后再试。</p></div>`;
+    return;
+  }
+  h.stage = Math.min(h.stage + 1, h.hints.length);
+  const revealed = h.hints.slice(0, h.stage);
+  const hasMore = h.stage < h.hints.length;
+
+  coachSlot().innerHTML = `
+    <div class="card info">
+      <h4>💡 思路提示 · ${h.stage}/${h.hints.length}</h4>
+      ${h.warmup ? `<p style="color:var(--muted)">${esc(h.warmup)}</p>` : ''}
+      ${revealed.map((t, i) => `
+        <div class="hint-item">
+          <div class="hint-label">提示 ${i + 1}</div>
+          <div class="hint-text">${esc(t)}</div>
+        </div>`).join('')}
+      ${hasMore
+        ? `<button id="btn-next-hint" class="primary">看提示 ${h.stage + 1}</button>`
+        : `<p style="color:var(--muted)">提示到此为止，动手试试；还是卡住，就在下方追问。</p>`}
+    </div>
+    ${chatUi()}`;
+  wireChat();
+  const next = $('btn-next-hint');
+  if (next) next.addEventListener('click', renderHints);
 }
 
 function renderReview(r) {
@@ -1269,6 +1331,7 @@ async function boot() {
     if (e.key === 'Enter') runCustom();
   });
 
+  $('btn-help').addEventListener('click', helpMe);
   $('btn-lang').addEventListener('click', onLangToggle);
 
   $('btn-list').addEventListener('click', () => {
